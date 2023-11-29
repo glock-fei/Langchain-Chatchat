@@ -7,3 +7,4 @@ from .fangzhou import FangZhouWorker
 from .qwen import QwenWorker
 from .baichuan import BaiChuanWorker
 from .azure import AzureWorker
+from .qwenvl import QwenvlWorker

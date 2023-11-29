@@ -62,15 +62,17 @@ async def chat(query: str = Body(..., description="用户输入", examples=["恼
             async for token in callback.aiter():
                 answer += token
                 # Use server-sent-events to stream the response
-                yield json.dumps(
-                    {"text": token, "chat_history_id": chat_history_id},
-                    ensure_ascii=False)
+                yield token
+                # yield json.dumps(
+                #     {"text": token, "chat_history_id": chat_history_id},
+                #     ensure_ascii=False)
         else:
             async for token in callback.aiter():
                 answer += token
-            yield json.dumps(
-                {"text": answer, "chat_history_id": chat_history_id},
-                ensure_ascii=False)
+            yield answer
+            # yield json.dumps(
+            #     {"text": answer, "chat_history_id": chat_history_id},
+            #     ensure_ascii=False)
 
         if SAVE_CHAT_HISTORY and len(chat_history_id) > 0:
             # 后续可以加入一些其他信息，比如真实的prompt等

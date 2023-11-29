@@ -89,15 +89,17 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
         if stream:
             async for token in callback.aiter():
                 # Use server-sent-events to stream the response
-                yield json.dumps({"answer": token}, ensure_ascii=False)
-            yield json.dumps({"docs": source_documents}, ensure_ascii=False)
+                # yield json.dumps({"answer": token}, ensure_ascii=False)
+                yield token
+            # yield json.dumps({"docs": source_documents}, ensure_ascii=False)
         else:
             answer = ""
             async for token in callback.aiter():
                 answer += token
-            yield json.dumps({"answer": answer,
-                              "docs": source_documents},
-                             ensure_ascii=False)
+            yield answer
+            # yield json.dumps({"answer": answer,
+            #                   "docs": source_documents},
+            #                  ensure_ascii=False)
         await task
 
     return StreamingResponse(knowledge_base_chat_iterator(query=query,
