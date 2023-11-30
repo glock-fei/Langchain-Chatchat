@@ -35,6 +35,7 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
                             max_tokens: Optional[int] = Body(None, description="限制LLM生成Token数量，默认None代表模型最大值"),
                             prompt_name: str = Body("default", description="使用的prompt模板名称(在configs/prompt_config.py中配置)"),
                             request: Request = None,
+                            result_format: Optional[str] = Body("message", description="设置返回格式，text 表示只返回文本")
                         ):
     kb = KBServiceFactory.get_service_by_name(knowledge_base_name)
     if kb is None:
@@ -89,17 +90,16 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
         if stream:
             async for token in callback.aiter():
                 # Use server-sent-events to stream the response
-                # yield json.dumps({"answer": token}, ensure_ascii=False)
-                yield token
-            # yield json.dumps({"docs": source_documents}, ensure_ascii=False)
+                yield json.dumps({"answer": token}, ensure_ascii=False) if result_format == "message" else token
+            if result_format == "message":
+                yield json.dumps({"docs": source_documents}, ensure_ascii=False)
         else:
             answer = ""
             async for token in callback.aiter():
                 answer += token
-            yield answer
-            # yield json.dumps({"answer": answer,
-            #                   "docs": source_documents},
-            #                  ensure_ascii=False)
+            yield json.dumps({"answer": answer,
+                              "docs": source_documents},
+                             ensure_ascii=False) if result_format == "message" else answer
         await task
 
     return StreamingResponse(knowledge_base_chat_iterator(query=query,

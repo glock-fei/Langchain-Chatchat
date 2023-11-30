@@ -27,6 +27,7 @@ async def chat(query: str = Body(..., description="用户输入", examples=["恼
                max_tokens: Optional[int] = Body(None, description="限制LLM生成Token数量，默认None代表模型最大值"),
                # top_p: float = Body(TOP_P, description="LLM 核采样。勿与temperature同时设置", gt=0.0, lt=1.0),
                prompt_name: str = Body("default", description="使用的prompt模板名称(在configs/prompt_config.py中配置)"),
+               result_format: Optional[str] = Body("message", description="设置返回格式，text 表示只返回文本")
                ):
     history = [History.from_data(h) for h in history]
 
@@ -62,17 +63,15 @@ async def chat(query: str = Body(..., description="用户输入", examples=["恼
             async for token in callback.aiter():
                 answer += token
                 # Use server-sent-events to stream the response
-                yield token
-                # yield json.dumps(
-                #     {"text": token, "chat_history_id": chat_history_id},
-                #     ensure_ascii=False)
+                yield json.dumps(
+                    {"text": token, "chat_history_id": chat_history_id},
+                    ensure_ascii=False) if result_format == "message" else token
         else:
             async for token in callback.aiter():
                 answer += token
-            yield answer
-            # yield json.dumps(
-            #     {"text": answer, "chat_history_id": chat_history_id},
-            #     ensure_ascii=False)
+            yield json.dumps(
+                {"text": answer, "chat_history_id": chat_history_id},
+                ensure_ascii=False) if result_format == "message" else answer
 
         if SAVE_CHAT_HISTORY and len(chat_history_id) > 0:
             # 后续可以加入一些其他信息，比如真实的prompt等
