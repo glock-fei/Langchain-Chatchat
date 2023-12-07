@@ -43,13 +43,18 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
 
     history = [History.from_data(h) for h in history]
 
-    async def knowledge_base_chat_iterator(query: str,
-                                           top_k: int,
-                                           history: Optional[List[History]],
-                                           model_name: str = LLM_MODELS[0],
-                                           prompt_name: str = prompt_name,
-                                           ) -> AsyncIterable[str]:
+    async def knowledge_base_chat_iterator(
+            query: str,
+            top_k: int,
+            history: Optional[List[History]],
+            model_name: str = LLM_MODELS[0],
+            prompt_name: str = prompt_name,
+    ) -> AsyncIterable[str]:
+        nonlocal max_tokens
         callback = AsyncIteratorCallbackHandler()
+        if isinstance(max_tokens, int) and max_tokens <= 0:
+            max_tokens = None
+
         model = get_ChatOpenAI(
             model_name=model_name,
             temperature=temperature,
@@ -58,8 +63,8 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
         )
         docs = search_docs(query, knowledge_base_name, top_k, score_threshold)
         context = "\n".join([doc.page_content for doc in docs])
-        if len(docs) == 0: ## 如果没有找到相关文档，使用Empty模板
-            prompt_template = get_prompt_template("knowledge_base_chat", "Empty")
+        if len(docs) == 0:  # 如果没有找到相关文档，使用empty模板
+            prompt_template = get_prompt_template("knowledge_base_chat", "empty")
         else:
             prompt_template = get_prompt_template("knowledge_base_chat", prompt_name)
         input_msg = History(role="user", content=prompt_template).to_msg_template(False)
@@ -75,17 +80,16 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
         )
 
         source_documents = []
-        doc_path = get_doc_path(knowledge_base_name)
         for inum, doc in enumerate(docs):
-            filename = Path(doc.metadata["source"]).resolve().relative_to(doc_path)
-            parameters = urlencode({"knowledge_base_name": knowledge_base_name, "file_name":filename})
+            filename = doc.metadata.get("source")
+            parameters = urlencode({"knowledge_base_name": knowledge_base_name, "file_name": filename})
             base_url = request.base_url
             url = f"{base_url}knowledge_base/download_doc?" + parameters
             text = f"""出处 [{inum + 1}] [{filename}]({url}) \n\n{doc.page_content}\n\n"""
             source_documents.append(text)
 
-        if len(source_documents) == 0: # 没有找到相关文档
-            source_documents.append(f"""<span style='color:red'>未找到相关文档,该回答为大模型自身能力解答！</span>""")
+        if len(source_documents) == 0:  # 没有找到相关文档
+            source_documents.append(f"<span style='color:red'>未找到相关文档,该回答为大模型自身能力解答！</span>")
 
         if stream:
             async for token in callback.aiter():
