@@ -1,4 +1,4 @@
-from fastapi import Body, Request
+from fastapi import Body, Request, Header
 from fastapi.responses import StreamingResponse
 from configs import (LLM_MODELS, VECTOR_SEARCH_TOP_K, SCORE_THRESHOLD, TEMPERATURE)
 from server.utils import wrap_done, get_ChatOpenAI
@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlencode
 from server.knowledge_base.kb_doc_api import search_docs
+from server.kafka_notify import *
 
 
 async def knowledge_base_chat(query: str = Body(..., description="用户输入", examples=["你好"]),
@@ -35,7 +36,13 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
                             max_tokens: Optional[int] = Body(None, description="限制LLM生成Token数量，默认None代表模型最大值"),
                             prompt_name: str = Body("default", description="使用的prompt模板名称(在configs/prompt_config.py中配置)"),
                             request: Request = None,
-                            result_format: Optional[str] = Body("message", description="设置返回格式，text 表示只返回文本")
+                            result_format: Optional[str] = Body("message", description="设置返回格式，text 表示只返回文本"),
+                            chat_session_id: int = Body(1, description="会话id"),
+                            question_id: int = Body(1, description="提问id"),
+                            platform_tag: Optional[str] = Body("TGYL", description="平台标识"),
+                            utoken: str = Header(None, alias="token"),
+                            cid: str = Header(None, description="企业id"),
+                            entity_id: str = Header(None, description="用户体系id")
                         ):
     kb = KBServiceFactory.get_service_by_name(knowledge_base_name)
     if kb is None:
@@ -91,19 +98,23 @@ async def knowledge_base_chat(query: str = Body(..., description="用户输入",
         if len(source_documents) == 0:  # 没有找到相关文档
             source_documents.append(f"<span style='color:red'>未找到相关文档,该回答为大模型自身能力解答！</span>")
 
+        answer = ""
         if stream:
             async for token in callback.aiter():
+                answer += token
                 # Use server-sent-events to stream the response
                 yield json.dumps({"answer": token}, ensure_ascii=False) if result_format == "message" else token
             if result_format == "message":
                 yield json.dumps({"docs": source_documents}, ensure_ascii=False)
         else:
-            answer = ""
             async for token in callback.aiter():
                 answer += token
             yield json.dumps({"answer": answer,
                               "docs": source_documents},
                              ensure_ascii=False) if result_format == "message" else answer
+
+        # 添加问答的消息去平台
+        send_message(chat_session_id, question_id, query, answer, platform_tag, utoken, cid, entity_id)
         await task
 
     return StreamingResponse(knowledge_base_chat_iterator(query=query,

@@ -1,9 +1,6 @@
-import json
 import sys
 
 from fastchat.conversation import Conversation
-from configs import TEMPERATURE
-from http import HTTPStatus
 from typing import List, Literal, Dict
 
 from fastchat import conversation as conv
@@ -11,6 +8,7 @@ from server.model_workers.base import *
 from server.model_workers.base import ApiEmbeddingsParams
 
 import re
+
 
 class QwenvlWorker(ApiModelWorker):
     DEFAULT_EMBED_MODEL = "text-embedding-v1"
