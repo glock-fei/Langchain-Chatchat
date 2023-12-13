@@ -430,6 +430,10 @@ def run_api_server(started_event: mp.Event = None, run_mode: str = None):
     from server.api import create_app
     import uvicorn
     from server.utils import set_httpx_config
+    from server.knowledge_base.kb_service.base import get_kb_file_details
+    from server.knowledge_base.kb_doc_api import update_docs
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from configs import DEFAULT_KNOWLEDGE_BASE, CHUNK_SIZE, OVERLAP_SIZE
     set_httpx_config()
 
     app = create_app(run_mode=run_mode)
@@ -437,6 +441,34 @@ def run_api_server(started_event: mp.Event = None, run_mode: str = None):
 
     host = API_SERVER["host"]
     port = API_SERVER["port"]
+
+    # ################添加定时任务，加载知识库文章###############################
+    def update_knowledge_docs():
+        files = get_kb_file_details(DEFAULT_KNOWLEDGE_BASE)
+        file_names = [item["file_name"] for item in files if not item["in_db"] and os.path.basename(item["file_name"]) != "output.md"]
+        if len(file_names) > 0:
+            update_docs(
+                knowledge_base_name=DEFAULT_KNOWLEDGE_BASE,
+                file_names=[file_names[0]],
+                override_custom_docs=True,
+                chunk_size=CHUNK_SIZE,
+                chunk_overlap=OVERLAP_SIZE,
+                zh_title_enhance=True,
+                docs={},
+                not_refresh_vs_cache=True,
+            )
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=update_knowledge_docs, trigger='interval', seconds=300, max_instances=3)
+
+    @app.on_event("startup")
+    async def startup_event():
+        scheduler.start()
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        scheduler.shutdown()
+    # #################添加定时任务#########################################
 
     uvicorn.run(app, host=host, port=port)
 
@@ -878,7 +910,6 @@ if __name__ == "__main__":
         asyncio.set_event_loop(loop)
     # 同步调用协程代码
     loop.run_until_complete(start_main_server())
-
 
 # 服务启动后接口调用示例：
 # import openai

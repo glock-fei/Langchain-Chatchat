@@ -24,9 +24,9 @@ from server.llm_api import (list_running_models, list_config_models,
 from server.utils import (BaseResponse, ListResponse, FastAPI, MakeFastAPIOffline,
                           get_server_configs, get_prompt_template)
 from typing import List, Literal
+from server.kafka_notify import *
 
 nltk.data.path = [NLTK_DATA_PATH] + nltk.data.path
-
 
 async def document():
     return RedirectResponse(url="/docs")
@@ -50,6 +50,7 @@ def create_app(run_mode: str = None):
             allow_headers=["*"],
         )
     mount_app_routes(app, run_mode=run_mode)
+
     return app
 
 
@@ -140,6 +141,10 @@ def mount_app_routes(app: FastAPI, run_mode: str = None):
             tags=["Other"],
             summary="将文本向量化，支持本地模型和在线模型",
             )(embed_texts_endpoint)
+    app.post("/other/htmltomarkdown",
+             tags=["Other"],
+             summary="html转markdown",
+             )(html_to_markdown)
 
 
 def mount_knowledge_routes(app: FastAPI):
@@ -249,7 +254,6 @@ def mount_filename_summary_routes(app: FastAPI):
              tags=["Knowledge kb_summary_api Management"],
              summary="重建单个知识库文件摘要"
              )(recreate_summary_vector_store)
-
 
 
 def run_api(host, port, **kwargs):
